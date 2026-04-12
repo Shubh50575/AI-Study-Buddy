@@ -1,0 +1,21 @@
+Study Notes : Dy
+----------------------------------------
+
+**Definition:**  
+In calculus, 'dy' represents an infinitesimal change in the variable 'y'. It is commonly used in the context of differentiation and integration, where it denotes the derivative of a function with respect to 'x', symbolizing how a small change in 'x' affects 'y'.
+
+  
+**Explanation:**  
+1. 'dy' is often used in conjunction with 'dx', representing an infinitesimal change in the variable 'x'.
+2. In the context of derivatives, 'dy/dx' signifies the slope of the function at a given point.
+3. In integration, 'dy' can be seen as an integral that accumulates areas under the curve defined by a function.
+
+  
+**Real-use cases:**  
+1. In physics, 'dy' is used in motion equations to describe small changes in position over time.
+2. In economics, 'dy' can help model small changes in revenue or cost with respect to changes in production level.
+3. In engineering, 'dy' is essential in stress and strain analysis to evaluate the minute changes in materials under load.
+
+  
+**Summary:**  
+'Dy' is a crucial concept in calculus that signifies a minute change in the variable 'y'. It plays a pivotal role in understanding the behavior of functions through derivatives and integrals, with practical applications across various fields such as physics, economics, and engineering.

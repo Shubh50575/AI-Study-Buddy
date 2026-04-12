@@ -1,0 +1,21 @@
+Study Notes : What is bom
+----------------------------------------
+
+**Definition:**  
+A Bill of Materials (BOM) is a comprehensive list of raw materials, components, and assemblies required to manufacture a product. It outlines the quantities and specifications needed at each stage of the production process, serving as a foundational document in manufacturing and engineering.
+
+  
+**Explanation:**  
+1. A BOM acts as a recipe for manufacturing, detailing every necessary part and material.  
+2. It can be hierarchical, showing relationships between components, subassemblies, and finished products.  
+3. BOMs help streamline inventory management and procurement processes by providing clear specifications.  
+
+  
+**Real-use cases:**  
+1. In the electronics industry, a BOM details every circuit component needed for assembling a device.  
+2. In the automotive industry, manufacturers use BOMs to ensure all parts are accounted for in vehicle production.  
+3. Software development teams create BOMs to outline software dependencies and libraries required for building an application.  
+
+  
+**Summary:**  
+A Bill of Materials is essential in various industries, enabling efficient planning and resource management by clearly listing all components needed for product creation. By utilizing BOMs, companies can enhance communication, reduce errors, and maintain quality in their manufacturing processes.
