@@ -3,5 +3,5 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/AI-Study-Buddy/'  // <-- Add this line
+  // base: '/AI-Study-Buddy/'  ye line comment ho gayi
 })
