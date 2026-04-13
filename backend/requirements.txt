@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 requests
+dnspython
 phonenumbers
 python-dotenv
 sqlalchemy
@@ -11,4 +12,4 @@ pydantic
 python-jose
 passlib
 bcrypt
-dnspython 
+email-validator
