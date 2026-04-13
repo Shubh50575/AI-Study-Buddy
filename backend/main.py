@@ -217,6 +217,7 @@ import os
 import re
 import json
 import requests
+import nltk_setup
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
