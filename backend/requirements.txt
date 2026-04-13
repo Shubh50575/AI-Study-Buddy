@@ -11,3 +11,4 @@ pydantic
 python-jose
 passlib
 bcrypt
+dnspython 
