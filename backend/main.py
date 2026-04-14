@@ -213,6 +213,7 @@
 #     db.commit()
 #     return {"message": "All history cleared"}
 
+
 import os
 import re
 import json
@@ -241,9 +242,15 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
 # CORS
+origins = [
+    "https://ai-study-buddy-3-by3o.onrender.com",   # your frontend URL
+    "http://localhost:5173",                        # local dev
+    "http://localhost:8000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=origins,          # or use ["*"] for testing only
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
