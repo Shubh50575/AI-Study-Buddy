@@ -18,19 +18,18 @@
 # load_dotenv()
 # Base.metadata.create_all(bind=engine)
 # app = FastAPI()
-origins = [
-    "https://ai-study-buddy-3-by3o.onrender.com",   # your frontend URL
-    "http://localhost:5173",                        # local dev
-    "http://localhost:8000",
-]
+# Create the app
+app = FastAPI()
 
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["http://localhost:5173"],
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
+# Configure CORS - MUST be before your routes
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://ai-study-buddy-3-by3o.onrender.com"],  # Your frontend URL
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
+
 
 # # ---------- Pydantic Models ----------
 # class SignupReq(BaseModel):
