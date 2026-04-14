@@ -1,9 +1,9 @@
+from __future__ import annotations
 # import os
 # import re
 # import json
 # import requests
 from fastapi import FastAPI
-from __future__ import annotations
 # from fastapi import FastAPI, Depends, HTTPException
 # from fastapi.middleware.cors import CORSMiddleware
 # from fastapi.responses import FileResponse
