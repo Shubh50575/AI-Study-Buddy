@@ -18,6 +18,11 @@
 # load_dotenv()
 # Base.metadata.create_all(bind=engine)
 # app = FastAPI()
+origins = [
+    "https://ai-study-buddy-3-by3o.onrender.com",   # your frontend URL
+    "http://localhost:5173",                        # local dev
+    "http://localhost:8000",
+]
 
 # app.add_middleware(
 #     CORSMiddleware,
