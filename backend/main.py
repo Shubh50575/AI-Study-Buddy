@@ -78,15 +78,23 @@ class MessageRequest(BaseModel):
 # ---------- AI Helper ----------
 def call_ai(prompt):
     url = "https://openrouter.ai/api/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}"}
-    data = {"model": "openai/gpt-4o-mini", "messages": [{"role": "user", "content": prompt}]}
+    headers = {
+        "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": "openai/gpt-3.5-turbo",  # ya "meta-llama/llama-3-8b-instruct"
+        "messages": [{"role": "user", "content": prompt}]
+    }
     try:
         res = requests.post(url, headers=headers, json=data, timeout=30)
         res.raise_for_status()
         return res.json()["choices"][0]["message"]["content"]
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         print("AI Error:", e)
-        return "AI Connection Error"
+        if res.status_code == 401:
+            return "API Connection Error"
+        return f"AI Connection Error: {str(e)}"
 
 def parse_json(raw_str):
     raw_str = re.sub(r'```json\s*|\s*```', '', raw_str.strip())
