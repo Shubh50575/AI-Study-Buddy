@@ -35,7 +35,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://ai-study-buddy-3-by3o.onrender.com"],  # Your frontend URL
+    allow_origins=origins,   # use the list, not just one URL
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
