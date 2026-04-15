@@ -26,22 +26,15 @@ load_dotenv()
 Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-# ... other imports
-
-app = FastAPI()
-
 # CORS - MUST be here, before any routes
 origins = [
-    "https://ai-study-buddy-3-by3o.onrender.com",
-    "http://localhost:5173",
-    "http://localhost:8000",
+    "https://ai-study-buddy-2-l7h6.onrender.com", # Your frontend URL (no trailing slash)
+    "http://localhost:5173", # For local development
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,      # ← use the list variable
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
