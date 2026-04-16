@@ -28,7 +28,7 @@ app = FastAPI()
 
 # CORS - MUST be here, before any routes
 origins = [
-    "https://ai-study-buddy-1-6m0h.onrender.com", # Your frontend URL (no trailing slash)
+    "https://ai-study-buddy-2-0bew.onrender.com", # Your frontend URL (no trailing slash)
     "http://localhost:5173", # For local development
 ]
 
