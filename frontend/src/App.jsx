@@ -534,7 +534,7 @@ export default function App() {
 
       <header>
         <button className="m-btn" onClick={() => setSidebar(true)}>☰</button>
-        <h1>AI Smart Buddy 🤖</h1>
+        <h1>AI Study Buddy 🤖</h1>
       </header>
 
       <div className="content">
