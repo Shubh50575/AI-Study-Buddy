@@ -1,4 +1,4 @@
-# 🤖 AI Smart Buddy
+# 🤖 AI Study Buddy
 
 AI Smart Buddy is a full-stack intelligent study assistant built with FastAPI backend and React frontend that helps students generate notes, quizzes, flashcards, and explanations using AI, featuring PDF/TXT export functionality, secure JWT authentication, search history tracking, and fully responsive design.
 ---
