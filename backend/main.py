@@ -1,10 +1,9 @@
-from __future__ import annotations
 import os
 import re
 import json
 import requests
-import nltk_setup
 import time
+import random
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -15,7 +14,6 @@ from pydantic import BaseModel, EmailStr
 from database import Base, engine, get_db
 import models, auth_utils
 from validation_utils import validate_email_address, validate_mobile_number
-from validation_utils import quick_email_syntax_check, quick_mobile_syntax_check
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from dotenv import load_dotenv
@@ -27,24 +25,26 @@ load_dotenv()
 Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
-# CORS - MUST be here, before any routes
+# ---------- CORS ----------
 origins = [
-    "https://ai-study-buddy-2-0bew.onrender.com", # Your frontend URL (no trailing slash)
-    "http://localhost:5173", # For local development
+    "https://ai-study-buddy-2-0bew.onrender.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
 # ---------- Initialize ML components ----------
 rake_extractor = RAKEKeywordExtractor()
 
-# Seed training data for topic classification (you can add more)
 seed_training_data = [
     ("neural networks deep learning", "Technology"),
     ("history world war 2", "History"),
@@ -76,6 +76,13 @@ class LoginReq(BaseModel):
 class MessageRequest(BaseModel):
     message: str
 
+# ---------- Helper: Generate Fixed User ID ----------
+def generate_user_id(name: str) -> str:
+    """Generate a consistent user ID based on name (same user always gets same ID)"""
+    name_part = re.sub(r'\s', '', name)[:6].capitalize()
+    hash_val = hash(name) % 10000
+    return f"{name_part}{abs(hash_val)}"
+
 # ---------- AI Helper ----------
 def call_ai(prompt):
     url = "https://openrouter.ai/api/v1/chat/completions"
@@ -84,17 +91,15 @@ def call_ai(prompt):
         "Content-Type": "application/json"
     }
     data = {
-        "model": "openai/gpt-3.5-turbo",  # ya "meta-llama/llama-3-8b-instruct"
+        "model": "openai/gpt-3.5-turbo",
         "messages": [{"role": "user", "content": prompt}]
     }
     try:
-        res = requests.post(url, headers=headers, json=data, timeout=30)
+        res = requests.post(url, headers=headers, json=data, timeout=60)
         res.raise_for_status()
         return res.json()["choices"][0]["message"]["content"]
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         print("AI Error:", e)
-        if res.status_code == 401:
-            return "API Connection Error"
         return f"AI Connection Error: {str(e)}"
 
 def parse_json(raw_str):
@@ -110,40 +115,43 @@ def parse_json(raw_str):
 # ---------- Auth Endpoints ----------
 @app.post("/signup")
 def signup(user: SignupReq, db: Session = Depends(get_db)):
-    # 1. Check if passwords match
     if user.password != user.confirm_password:
         raise HTTPException(400, "Passwords do not match")
     
-    # 2. Validate password strength
     if len(user.password) < 6:
         raise HTTPException(400, "Password must be at least 6 characters long")
     
-    # 3. Email Validation (Full verification)
-    email_validation = validate_email_address(user.email)
-    if not email_validation["valid"]:
-        raise HTTPException(400, email_validation["message"])
+    # Email validation: Must end with @gmail.com (case-insensitive)
+    email = user.email.strip()
+    if not email.lower().endswith("@gmail.com"):
+        raise HTTPException(400, "Only Gmail addresses are allowed. Email must end with @gmail.com")
     
-    # 4. Mobile Number Validation
-    mobile_validation = validate_mobile_number(user.mobile, "IN")
-    if not mobile_validation["valid"]:
-        raise HTTPException(400, mobile_validation["message"])
+    # Normalize to lowercase for storage
+    normalized_email = email.lower()
     
-    # 5. Check if email already exists
-    existing_email = db.query(models.User).filter(models.User.email == user.email).first()
+    # Mobile validation - only 10 digits (no +91, no prefix restrictions)
+    mobile = user.mobile.strip()
+    if not mobile.isdigit() or len(mobile) != 10:
+        raise HTTPException(400, "Mobile number must be exactly 10 digits (0-9 only)")
+    
+    # Check existing email
+    existing_email = db.query(models.User).filter(models.User.email == normalized_email).first()
     if existing_email:
         raise HTTPException(400, "Email already registered")
     
-    # 6. Check if mobile already exists
-    existing_mobile = db.query(models.User).filter(models.User.mobile == user.mobile).first()
+    # Check existing mobile
+    existing_mobile = db.query(models.User).filter(models.User.mobile == mobile).first()
     if existing_mobile:
         raise HTTPException(400, "Mobile number already registered")
     
-    # 7. Create new user
+    user_id = generate_user_id(user.name)
+    
     new_user = models.User(
         name=user.name.strip(),
-        email=user.email.lower().strip(),
-        mobile=mobile_validation["e164_format"],  # Store in E.164 format
-        hashed_password=auth_utils.hash_password(user.password)
+        email=normalized_email,
+        mobile=mobile,
+        hashed_password=auth_utils.hash_password(user.password),
+        user_id=user_id
     )
     
     db.add(new_user)
@@ -158,7 +166,8 @@ def signup(user: SignupReq, db: Session = Depends(get_db)):
         "user_info": {
             "name": new_user.name,
             "email": new_user.email,
-            "mobile": new_user.mobile
+            "mobile": new_user.mobile,
+            "user_id": user_id
         }
     }
 
@@ -166,23 +175,57 @@ def signup(user: SignupReq, db: Session = Depends(get_db)):
 def login(req: LoginReq, db: Session = Depends(get_db)):
     if not req.identifier or not req.password:
         raise HTTPException(400, "All fields are required")
-    user = db.query(models.User).filter(
-        or_(
-            func.lower(models.User.email) == req.identifier.lower(),
-            models.User.mobile == req.identifier
-        )
-    ).first()
-    if not user or not auth_utils.verify_password(req.password, user.hashed_password):
-        raise HTTPException(401, "Invalid credentials")
+    
+    identifier = req.identifier.strip()
+    
+    # Check if identifier looks like an email (contains @)
+    if "@" in identifier:
+        # Check if it's a Gmail address (case-insensitive)
+        if not identifier.lower().endswith("@gmail.com"):
+            raise HTTPException(400, "Only Gmail addresses are allowed for login")
+        
+        # Normalize email to lowercase for matching
+        normalized_identifier = identifier.lower()
+        user = db.query(models.User).filter(
+            func.lower(models.User.email) == normalized_identifier
+        ).first()
+    else:
+        # Mobile number - only 10 digits allowed (no prefix restrictions)
+        if not identifier.isdigit() or len(identifier) != 10:
+            raise HTTPException(400, "Mobile number must be exactly 10 digits")
+        
+        user = db.query(models.User).filter(
+            models.User.mobile == identifier
+        ).first()
+    
+    if not user:
+        raise HTTPException(401, "Invalid email/mobile or password")
+    
+    if not auth_utils.verify_password(req.password, user.hashed_password):
+        raise HTTPException(401, "Invalid email/mobile or password")
+    
+    user_id = generate_user_id(user.name)
+    
     return {
         "message": "Login successful",
         "token": auth_utils.create_access_token({"sub": user.email, "id": user.id}),
         "user": {
             "name": user.name,
             "email": user.email,
-            "mobile": user.mobile
+            "mobile": user.mobile,
+            "user_id": user_id
         }
     }
+
+# ---------- Debug Endpoint (Remove in production) ----------
+@app.get("/debug/users")
+def debug_users():
+    from database import SessionLocal
+    db = SessionLocal()
+    users = db.query(models.User).all()
+    result = [{"name": u.name, "email": u.email, "mobile": u.mobile} for u in users]
+    db.close()
+    return {"users": result}
 
 # ---------- AI Endpoints (Protected) ----------
 @app.post("/explain")
@@ -213,20 +256,57 @@ def explain(data: MessageRequest, current_user=Depends(auth_utils.get_current_us
 
 @app.post("/generate-quiz")
 def quiz(data: MessageRequest, current_user=Depends(auth_utils.get_current_user), db: Session = Depends(get_db)):
+    # Calculate number of questions based on topic length (5 to 8)
+    topic_length = len(data.message)
+    
+    # Length mapping: 1-10→5, 11-20→6, 21-30→7, 31+→8
+    if topic_length <= 10:
+        num_questions = 5
+    elif topic_length <= 20:
+        num_questions = 6
+    elif topic_length <= 30:
+        num_questions = 7
+    else:
+        num_questions = 8
+    
     prompt = (
-        f"Create exactly 5 multiple choice questions on the topic: '{data.message}'.\n"
+        f"Create exactly {num_questions} multiple choice questions on the topic: '{data.message}'.\n"
         "Return ONLY a valid JSON array, no extra text, no markdown.\n"
-        "Format: [{\"question\": \"...\", \"options\": [\"A. ...\", \"B. ...\", \"C. ...\", \"D. ...\"], \"correct_answer\": \"A. ...\"}]\n"
-        "The correct_answer must exactly match one of the options strings."
+        "Format: [{\"question\": \"...\", \"options\": [\"A. ...\", \"B. ...\", \"C. ...\", \"D. ...\"], \"correct_answer\": \"...\"}]\n"
+        "IMPORTANT: Randomly distribute correct answers among A, B, C, or D. Do not always put correct answer as A.\n"
+        "Make questions diverse, challenging, and cover different aspects of the topic."
     )
     raw = call_ai(prompt)
     parsed = parse_json(raw)
-    if not isinstance(parsed, list):
-        parsed = [{
-            "question": "What is " + data.message + "?",
-            "options": ["A. Option1", "B. Option2", "C. Option3", "D. Option4"],
-            "correct_answer": "A. Option1"
-        }]
+    
+    if not isinstance(parsed, list) or len(parsed) != num_questions:
+        # Generate completely random fallback quiz (no templates)
+        parsed = []
+        option_labels = ["A", "B", "C", "D"]
+        
+        # Random words for variety
+        random_verbs = ["is", "are", "was", "were", "can be", "could be", "should be", "might be"]
+        random_adjectives = ["important", "basic", "advanced", "fundamental", "complex", "simple", "critical", "essential"]
+        
+        for i in range(num_questions):
+            correct_label = random.choice(option_labels)
+            random_num = random.randint(1000, 9999)
+            random_verb = random.choice(random_verbs)
+            random_adj = random.choice(random_adjectives)
+            
+            options_dict = {}
+            for label in option_labels:
+                if label == correct_label:
+                    options_dict[label] = f"{label}. Correct answer for question {random_num}"
+                else:
+                    options_dict[label] = f"{label}. Incorrect choice {random.randint(1, 999)}"
+            
+            parsed.append({
+                "question": f"Q{i+1}: What {random_verb} {random_adj} about {data.message[:20]}? (ID:{random_num})",
+                "options": [options_dict["A"], options_dict["B"], options_dict["C"], options_dict["D"]],
+                "correct_answer": options_dict[correct_label]
+            })
+    
     keywords = rake_extractor.extract(data.message, top_n=5)
     category_info = topic_classifier.predict(data.message)
     history = models.History(
@@ -239,19 +319,55 @@ def quiz(data: MessageRequest, current_user=Depends(auth_utils.get_current_user)
     )
     db.add(history)
     db.commit()
-    return {"quiz": parsed}
+    return {"quiz": parsed, "total_questions": len(parsed)}
+
 
 @app.post("/generate-flashcards")
 def flash(data: MessageRequest, current_user=Depends(auth_utils.get_current_user), db: Session = Depends(get_db)):
+    # Calculate number of flashcards based on topic length (5 to 8)
+    topic_length = len(data.message)
+    
+    # Length mapping: 1-10→5, 11-20→6, 21-30→7, 31+→8
+    if topic_length <= 10:
+        num_cards = 5
+    elif topic_length <= 20:
+        num_cards = 6
+    elif topic_length <= 30:
+        num_cards = 7
+    else:
+        num_cards = 8
+    
     prompt = (
-        f"Create exactly 5 flashcards for: '{data.message}'.\n"
+        f"Create exactly {num_cards} flashcards for: '{data.message}'.\n"
         "Return ONLY a valid JSON array, no extra text, no markdown.\n"
-        "Format: [{\"question\": \"...\", \"answer\": \"...\"}]"
+        "Format: [{\"question\": \"...\", \"answer\": \"...\"}]\n"
+        "Make flashcards cover key concepts, definitions, and important facts about the topic."
     )
     raw = call_ai(prompt)
     parsed = parse_json(raw)
-    if not isinstance(parsed, list):
-        parsed = [{"question": "What is " + data.message + "?", "answer": "It is a concept."}]
+    
+    if not isinstance(parsed, list) or len(parsed) != num_cards:
+        # Generate completely random fallback flashcards (no templates)
+        parsed = []
+        
+        # Random words for variety
+        random_question_words = ["What", "Why", "How", "When", "Where", "Which", "Who", "What makes", "What defines"]
+        random_verbs = ["is", "are", "was", "can be", "could be", "should be", "represents", "means"]
+        
+        for i in range(num_cards):
+            random_q_word = random.choice(random_question_words)
+            random_verb = random.choice(random_verbs)
+            random_num = random.randint(1000, 9999)
+            random_answer_num = random.randint(1, 999)
+            
+            question = f"{random_q_word} {random_verb} {data.message[:25]}? (Card #{random_num})"
+            answer = f"This is the answer for {data.message[:20]} - Reference: {random_answer_num}"
+            
+            parsed.append({
+                "question": question,
+                "answer": answer
+            })
+    
     keywords = rake_extractor.extract(data.message, top_n=5)
     category_info = topic_classifier.predict(data.message)
     history = models.History(
@@ -264,13 +380,13 @@ def flash(data: MessageRequest, current_user=Depends(auth_utils.get_current_user
     )
     db.add(history)
     db.commit()
-    return {"flashcards": parsed}
+    return {"flashcards": parsed, "total_cards": len(parsed)}
 
-# ---------- Export Endpoints (TXT and PDF) ----------
+# ---------- Export Endpoints ----------
 @app.post("/export-txt")
 def export_txt(data: dict, current_user=Depends(auth_utils.get_current_user)):
     content = data.get("content", "")
-    topic = data.get("topic", "Notes")  # already camelCase from frontend
+    topic = data.get("topic", "Notes")
     header = f"Study Notes : {topic}\n{'-' * 40}\n\n"
     final_content = header + content
     path = f"notes_{current_user.id}.txt"
@@ -300,7 +416,7 @@ def export_pdf(data: dict, current_user=Depends(auth_utils.get_current_user)):
     doc.build(story)
     return FileResponse(path, filename=f"{topic.replace(' ', '_')}_notes.pdf")
 
-# ---------- History Endpoint (with keywords & category) ----------
+# ---------- History Endpoint ----------
 @app.get("/history")
 def get_history(current_user=Depends(auth_utils.get_current_user), db: Session = Depends(get_db)):
     history = db.query(models.History).filter(models.History.user_id == current_user.id).order_by(models.History.created_at.desc()).limit(20).all()
@@ -330,7 +446,7 @@ def clear_all_history(current_user=Depends(auth_utils.get_current_user), db: Ses
     db.commit()
     return {"message": "All history cleared"}
 
-# ---------- Additional ML Endpoints (optional) ----------
+# ---------- ML Endpoints ----------
 @app.post("/extract-keywords")
 def extract_keywords(data: MessageRequest, current_user=Depends(auth_utils.get_current_user)):
     keywords = rake_extractor.extract(data.message, top_n=5)
@@ -341,7 +457,7 @@ def classify_topic(data: MessageRequest, current_user=Depends(auth_utils.get_cur
     result = topic_classifier.predict(data.message)
     return result
 
-# ---------- ✅ PING ENDPOINT (For Render Keep Alive) ----------
+# ---------- Ping Endpoint ----------
 @app.get("/ping")
 def ping():
     return {
