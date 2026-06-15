@@ -1,22 +1,18 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 
-const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const API = "http://localhost:8000";
 
 // ---------- Validation Helpers ----------
+// Email validation: Must end with @gmail.com
 const validateEmailSyntax = (email) => {
-  const pattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-  return pattern.test(email);
+  if (!email) return false;
+  return email.endsWith("@gmail.com");
 };
 
 const validateMobileSyntax = (mobile) => {
   const pattern = /^\d{10}$/;
   return pattern.test(mobile);
-};
-
-const validatePasswordStrength = (password) => {
-  if (password.length < 6) return "Password must be at least 6 characters";
-  return null;
 };
 
 // Rainbow colors for first letter
@@ -32,7 +28,7 @@ const getLetterColor = (letter) => {
   return colors[letter.toUpperCase()] || "#7c3aed";
 };
 
-// Convert topic to Camel Case (first letter capital, rest small)
+// Convert topic to Camel Case
 const toCamelCase = (str) => {
   if (!str) return "Notes";
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
@@ -75,9 +71,15 @@ export default function App() {
 
   // ---------- Helper Functions ----------
   const getUserID = () => {
+    if (user?.user_id) return user.user_id;
     if (!user?.name) return "";
     const namePart = user.name.replace(/\s/g, "").slice(0, 6);
-    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    let hash = 0;
+    for (let i = 0; i < user.name.length; i++) {
+      hash = ((hash << 5) - hash) + user.name.charCodeAt(i);
+      hash = hash & hash;
+    }
+    const randomNum = Math.abs(hash % 10000);
     return `${namePart}${randomNum}`;
   };
 
@@ -145,25 +147,19 @@ export default function App() {
       newErrors.email = "This field is required";
       isValid = false;
     } else if (!validateEmailSyntax(form.email)) {
-      newErrors.email = "Enter a valid email address (e.g., name@example.com)";
+      newErrors.email = "Email must end with @gmail.com";
       isValid = false;
     }
     if (!form.mobile.trim()) {
       newErrors.mobile = "This field is required";
       isValid = false;
     } else if (!validateMobileSyntax(form.mobile)) {
-      newErrors.mobile = "Enter a valid 10-digit mobile number";
+      newErrors.mobile = "Mobile number must be exactly 10 digits";
       isValid = false;
     }
     if (!form.password.trim()) {
       newErrors.password = "This field is required";
       isValid = false;
-    } else {
-      const pwdErr = validatePasswordStrength(form.password);
-      if (pwdErr) {
-        newErrors.password = pwdErr;
-        isValid = false;
-      }
     }
     if (!form.confirm_password.trim()) {
       newErrors.confirm = "This field is required";
@@ -300,6 +296,13 @@ export default function App() {
   };
 
   const download = async (format) => {
+    // Check if answer has valid content
+    if (!answer || answer.trim() === "" || answer.includes("⚠️") || answer.includes("❌")) {
+      setErrors({ ...errors, general: "No content to download. Please generate explanation first." });
+      setTimeout(() => setErrors({ ...errors, general: "" }), 3000);
+      return;
+    }
+    
     const formattedTopic = toCamelCase(topic);
     const res = await fetch(`${API}/export-${format}`, {
       method: "POST",
@@ -360,7 +363,7 @@ export default function App() {
                 <input
                   type="text"
                   name="fullname"
-                  autoComplete="name"
+                  autoComplete="off"
                   placeholder="Full Name"
                   value={form.name}
                   onChange={(e) => {
@@ -376,8 +379,8 @@ export default function App() {
             <input
               type="text"
               name={authView === "login" ? "login_identifier" : "email"}
-              autoComplete={authView === "login" ? "username" : "email"}
-              placeholder={authView === "login" ? "Email or Mobile" : "Email"}
+              autoComplete="off"
+              placeholder={authView === "login" ? "Email or Mobile" : "Email (must end with @gmail.com)"}
               value={form.email}
               onChange={(e) => {
                 setForm({ ...form, email: e.target.value });
@@ -392,12 +395,15 @@ export default function App() {
                 <input
                   type="tel"
                   name="mobile"
-                  autoComplete="tel"
+                  autoComplete="off"
                   placeholder="Mobile Number (10 digits)"
                   value={form.mobile}
                   onChange={(e) => {
-                    setForm({ ...form, mobile: e.target.value });
-                    setErrors({ ...errors, mobile: "" });
+                    const value = e.target.value;
+                    if (/^\d*$/.test(value) && value.length <= 10) {
+                      setForm({ ...form, mobile: value });
+                      setErrors({ ...errors, mobile: "" });
+                    }
                   }}
                   className={errors.mobile ? "error-input" : ""}
                 />
@@ -422,7 +428,7 @@ export default function App() {
               <input
                 type="password"
                 name="password"
-                autoComplete="new-password"
+                autoComplete="off"
                 placeholder="Password"
                 value={form.password}
                 onChange={(e) => {
@@ -559,16 +565,19 @@ export default function App() {
                 __html: answer.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>"),
               }}
             />
-            <div className="dl-btns">
-              <button onClick={() => download("txt")}>Download TXT</button>
-              <button onClick={() => download("pdf")}>Download PDF</button>
-            </div>
+            {/* Download buttons ONLY for valid explanation content */}
+            {!answer.includes("⚠️") && !answer.includes("❌") && answer.length > 50 && (
+              <div className="dl-btns">
+                <button onClick={() => download("txt")}>Download TXT</button>
+                <button onClick={() => download("pdf")}>Download PDF</button>
+              </div>
+            )}
           </div>
         )}
 
         {quiz.length > 0 && (
           <div className="quiz-box">
-            <h3>📝 Quiz Time!</h3>
+            <h3>📝 Quiz Time! ({quiz.length} Questions)</h3>
             {quiz.map((q, idx) => {
               const selected = quizAnswers[idx];
               const feedback = quizFeedback[idx];
@@ -634,5 +643,3 @@ export default function App() {
     </div>
   );
 }
-
-
