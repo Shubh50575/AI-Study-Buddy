@@ -1,5 +1,3 @@
-# backend/ml_utils.py
-
 import pickle
 import os
 from typing import List, Dict
@@ -8,11 +6,26 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from rake_nltk import Rake
 
-# Ensure stopwords are available
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords', quiet=True)
+# ---------- Download NLTK Data (Fix for Render) ----------
+def download_nltk_data():
+    """Download all required NLTK data"""
+    resources = [
+        ('tokenizers/punkt_tab', 'punkt_tab'),
+        ('tokenizers/punkt', 'punkt'),
+        ('corpora/stopwords', 'stopwords'),
+    ]
+    
+    for resource_path, resource_name in resources:
+        try:
+            nltk.data.find(resource_path)
+            print(f"✅ NLTK '{resource_name}' already available")
+        except LookupError:
+            print(f"⬇️ Downloading NLTK '{resource_name}'...")
+            nltk.download(resource_name, quiet=True)
+            print(f"✅ NLTK '{resource_name}' downloaded successfully!")
+
+# Run NLTK data download on import
+download_nltk_data()
 
 # ------------------------------------------------------------------
 # 1. Topic Classification: Naive Bayes + TF-IDF
@@ -62,14 +75,30 @@ class TopicClassifier:
 # ------------------------------------------------------------------
 class RAKEKeywordExtractor:
     def __init__(self):
-        self.rake = Rake()
+        try:
+            self.rake = Rake()
+        except Exception as e:
+            print(f"RAKE initialization error: {e}")
+            # Retry with download
+            download_nltk_data()
+            self.rake = Rake()
 
     def extract(self, text: str, top_n: int = 5) -> List[str]:
         """Extract key phrases using RAKE."""
         if not text:
             return []
-        self.rake.extract_keywords_from_text(text)
-        return self.rake.get_ranked_phrases()[:top_n]
+        try:
+            self.rake.extract_keywords_from_text(text)
+            return self.rake.get_ranked_phrases()[:top_n]
+        except Exception as e:
+            print(f"Keyword extraction error: {e}")
+            # Try downloading data again and retry
+            download_nltk_data()
+            try:
+                self.rake.extract_keywords_from_text(text)
+                return self.rake.get_ranked_phrases()[:top_n]
+            except:
+                return []
 
 
 class TFIDFKeywordExtractor:
