@@ -25,6 +25,30 @@ load_dotenv()
 Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
+# ---------- Auto-add user_id column on startup ----------
+@app.on_event("startup")
+def startup():
+    """Auto-add user_id column on startup"""
+    import sqlite3
+    try:
+        conn = sqlite3.connect("aistudybuddy.db")
+        cursor = conn.cursor()
+        
+        # Check if column exists
+        cursor.execute("PRAGMA table_info(users)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        if "user_id" not in columns:
+            cursor.execute("ALTER TABLE users ADD COLUMN user_id TEXT")
+            conn.commit()
+            print("✅ user_id column added successfully!")
+        else:
+            print("✅ user_id column already exists")
+        
+        conn.close()
+    except Exception as e:
+        print(f"Error adding column: {e}")
+
 # ---------- CORS ----------
 origins = [
     "https://ai-study-buddy-2-0bew.onrender.com",  # Your frontend URL
