@@ -365,27 +365,63 @@ def flash(data: MessageRequest, current_user=Depends(auth_utils.get_current_user
         f"Create exactly {num_cards} flashcards for: '{data.message}'.\n"
         "Return ONLY a valid JSON array, no extra text, no markdown.\n"
         "Format: [{\"question\": \"...\", \"answer\": \"...\"}]\n"
-        "Make flashcards cover key concepts, definitions, and important facts about the topic."
+        "Make flashcards cover key concepts, definitions, and important facts about the topic.\n"
+        "Make questions diverse and cover different aspects of the topic."
     )
     raw = call_ai(prompt)
     parsed = parse_json(raw)
     
     if not isinstance(parsed, list) or len(parsed) != num_cards:
-        # Generate completely random fallback flashcards (no templates)
+        # Generate completely random flashcards (NO TEMPLATES AT ALL)
         parsed = []
         
-        # Random words for variety
-        random_question_words = ["What", "Why", "How", "When", "Where", "Which", "Who", "What makes", "What defines"]
-        random_verbs = ["is", "are", "was", "can be", "could be", "should be", "represents", "means"]
+        # Large pools of random words
+        words = [
+            "concept", "definition", "principle", "theory", "application",
+            "feature", "component", "element", "aspect", "dimension",
+            "process", "mechanism", "function", "structure", "system",
+            "approach", "method", "technique", "practice", "framework",
+            "insight", "perspective", "viewpoint", "paradigm", "model",
+            "strategy", "tactic", "protocol", "standard", "guideline"
+        ]
+        
+        verbs = [
+            "is", "are", "was", "were", "can be", "could be", 
+            "should be", "represents", "means", "refers to",
+            "involves", "requires", "includes", "is used for",
+            "functions as", "acts as", "serves as", "works as"
+        ]
+        
+        question_starters = [
+            "What", "Why", "How", "When", "Where", "Which", "Who"
+        ]
+        
+        # Prepositions and connectors for variety
+        connectors = [
+            "of", "about", "regarding", "concerning", "related to",
+            "associated with", "connected to", "pertaining to"
+        ]
         
         for i in range(num_cards):
-            random_q_word = random.choice(random_question_words)
-            random_verb = random.choice(random_verbs)
-            random_num = random.randint(1000, 9999)
-            random_answer_num = random.randint(1, 999)
+            # Pick completely random words
+            word1 = random.choice(words)
+            word2 = random.choice(words)
+            while word2 == word1:
+                word2 = random.choice(words)
             
-            question = f"{random_q_word} {random_verb} {data.message[:25]}? (Card #{random_num})"
-            answer = f"This is the answer for {data.message[:20]} - Reference: {random_answer_num}"
+            verb = random.choice(verbs)
+            starter = random.choice(question_starters)
+            connector = random.choice(connectors)
+            
+            # Generate random numbers
+            q_num = random.randint(100, 999)
+            a_num = random.randint(1, 999)
+            
+            # Build question from random pieces
+            question = f"{starter} {verb} the {word1} {connector} {data.message[:20]}? (Q{q_num})"
+            
+            # Build answer from random pieces
+            answer = f"The {word2} {verb} that {data.message[:15]} - Ref: {a_num}"
             
             parsed.append({
                 "question": question,
@@ -405,7 +441,7 @@ def flash(data: MessageRequest, current_user=Depends(auth_utils.get_current_user
     db.add(history)
     db.commit()
     return {"flashcards": parsed, "total_cards": len(parsed)}
-
+    
 # ---------- Export Endpoints ----------
 @app.post("/export-txt")
 def export_txt(data: dict, current_user=Depends(auth_utils.get_current_user)):
