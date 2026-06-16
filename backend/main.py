@@ -37,9 +37,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://ai-study-buddy-2-0bew.onrender.com"
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
